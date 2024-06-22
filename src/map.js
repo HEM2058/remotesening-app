@@ -181,7 +181,7 @@ function MapComponent() {
 
         olFeature.setStyle(new Style({
           fill: new Fill({
-            color: colorMapping[feature.properties.class],
+            color: colorMapping[feature.properties.class_no],
           }),
           stroke: new Stroke({
             color: '#000000',
