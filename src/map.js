@@ -12,6 +12,8 @@ import axios from 'axios'; // Import Axios for API requests
 import Feature from 'ol/Feature';
 import Polygon from 'ol/geom/Polygon';
 import Zoom from 'ol/control/Zoom';
+import { ToastContainer, toast } from 'react-toastify';
+import 'react-toastify/dist/ReactToastify.css';
 
 function MapComponent() {
   const mapRef = useRef(null);
@@ -21,6 +23,8 @@ function MapComponent() {
   const [drawnGeoJSON, setDrawnGeoJSON] = useState(null); // New state to store drawn GeoJSON
   const [selectedIndex, setSelectedIndex] = useState('NDVI');
   const [selectedDate, setSelectedDate] = useState('');
+  const [fetchDataRequired, setFetchDataRequired] = useState(false); // State to track if fetching data is required
+  const [loading, setLoading] = useState(false); // State to track loading state
 
   useEffect(() => {
     const vectorSource = new VectorSource({ wrapX: false });
@@ -90,7 +94,14 @@ function MapComponent() {
 
         // Store the drawn GeoJSON in state
         setDrawnGeoJSON(geojson);
+        setFetchDataRequired(true); // Set flag to indicate fetching data is required
       });
+    }
+  };
+  const removeDrawInteraction = () => {
+    if (map && draw) {
+      map.removeInteraction(draw);
+      setDraw(null);
     }
   };
 
@@ -99,11 +110,20 @@ function MapComponent() {
       const vectorLayer = map.getLayers().getArray()[1];
       vectorLayer.getSource().clear();
       setDrawnGeoJSON(null); // Clear the drawn GeoJSON from state
+      setFetchDataRequired(false); // Reset flag
     }
   };
 
   const fetchGeoJSONData = async () => {
+    setLoading(true); // Set loading state to true before making API call
+
     try {
+      if (!selectedIndex || !selectedDate || !drawnGeoJSON) {
+        // If any of the required fields are missing, do not proceed with API call
+        return;
+      }
+      removeDrawInteraction();
+
       const response = await axios.post(`http://127.0.0.1:8000/api/indices/${selectedIndex.toLowerCase()}/`, {
         date: selectedDate,
         geometry: drawnGeoJSON // Include drawn GeoJSON in the request
@@ -129,14 +149,18 @@ function MapComponent() {
       map.getLayers().getArray()[1].getSource().addFeatures(olFeatures);
     } catch (error) {
       console.error('Error fetching GeoJSON data:', error);
+      toast.error(`Error fetching GeoJSON data: ${error.message}`);
+    } finally {
+      setLoading(false); // Reset loading state after API call
+      setFetchDataRequired(false); // Reset flag after API call
     }
   };
 
   useEffect(() => {
-    if (map) {
-      fetchGeoJSONData(); // Call fetchGeoJSONData when map is ready
+    if (fetchDataRequired && map) {
+      fetchGeoJSONData(); // Call fetchGeoJSONData when map is ready and data is required
     }
-  }, [map]);
+  }, [fetchDataRequired, map]);
 
   const handleIndexChange = (event) => {
     setSelectedIndex(event.target.value);
@@ -147,7 +171,11 @@ function MapComponent() {
   };
 
   const handleFetchData = () => {
-    fetchGeoJSONData();
+    if (selectedIndex && selectedDate && drawnGeoJSON) {
+      setFetchDataRequired(true); // Set flag to trigger fetching data
+    } else {
+      toast.error('Please select Index, Date, and draw a feature on the map.');
+    }
   };
 
   return (
@@ -187,12 +215,20 @@ function MapComponent() {
         </div>
         
         <button onClick={handleFetchData}>Fetch Data</button>
+     
       </div>
+      {loading && (
+          <div className="loader-container">
+            <div className="loader"></div>
+          </div>
+        )}
       <div ref={mapRef} className="map-container"></div>
       <div className="buttons">
         <button onClick={addDrawInteraction}>Draw Polygon</button>
+        <button onClick={removeDrawInteraction}>Stop Drawing</button>
         <button onClick={clearDrawnFeatures}>Clear Drawing</button>
       </div>
+      <ToastContainer position="top-center" /> {/* ToastContainer to display notifications */}
     </div>
   );
 }
