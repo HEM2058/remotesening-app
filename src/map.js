@@ -34,7 +34,7 @@ function MapComponent() {
   const [loading, setLoading] = useState(false);
   const [loadingDates, setLoadingDates] = useState(false); // State to track loading of available dates
   const [baseLayer, setBaseLayer] = useState('google'); // State to track current base layer
-  console.log(selectedDate)
+  console.log(typeof(cloudCover))
 
   useEffect(() => {
     const vectorSource = new VectorSource({ wrapX: false });
@@ -282,6 +282,10 @@ function MapComponent() {
         </label>
         <div>
           <h3>Select Date</h3>
+          <div>
+          <p>Filter image date by Cloud Cover</p>
+          <input type="number" value={cloudCover} onChange={handleCloudCoverChange} min="0" max="100" />
+        </div>
           <DatePicker
             selected={selectedDate}
             onChange={handleDateChange}
@@ -290,10 +294,7 @@ function MapComponent() {
             customInput={<CustomDateInput loading={loadingDates} />}
           />
         </div>
-        <div>
-          <h3>Cloud Cover</h3>
-          <input type="number" value={cloudCover} onChange={handleCloudCoverChange} min="0" max="100" />
-        </div>
+       
         <div className='sidebar-buttons'>
           <button onClick={handleFetchData}>Fetch Data</button>
           <button onClick={toggleBaseLayer}>{getToggleButtonText()}</button>
