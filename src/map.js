@@ -15,6 +15,10 @@ import Polygon from 'ol/geom/Polygon';
 import Zoom from 'ol/control/Zoom';
 import { ToastContainer, toast } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
+import DatePicker from 'react-datepicker';
+import 'react-datepicker/dist/react-datepicker.css';
+import { parseISO, format, isBefore, isAfter, startOfDay, endOfDay } from 'date-fns';
+import { FaSpinner } from 'react-icons/fa';
 
 function MapComponent() {
   const mapRef = useRef(null);
@@ -23,10 +27,14 @@ function MapComponent() {
   const [geoJSONFeatures, setGeoJSONFeatures] = useState([]);
   const [drawnGeoJSON, setDrawnGeoJSON] = useState(null);
   const [selectedIndex, setSelectedIndex] = useState('NDVI');
-  const [selectedDate, setSelectedDate] = useState('');
+  const [selectedDate, setSelectedDate] = useState(null); // Change to null
+  const [availableDates, setAvailableDates] = useState([]); // State to store available dates
+  const [cloudCover, setCloudCover] = useState(100); // State to store cloud cover value
   const [fetchDataRequired, setFetchDataRequired] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [loadingDates, setLoadingDates] = useState(false); // State to track loading of available dates
   const [baseLayer, setBaseLayer] = useState('google'); // State to track current base layer
+  console.log(selectedDate)
 
   useEffect(() => {
     const vectorSource = new VectorSource({ wrapX: false });
@@ -52,12 +60,11 @@ function MapComponent() {
       target: mapRef.current,
       layers: baseLayer === 'google' ? [googleLayer, vectorLayer] : [osmLayer, vectorLayer], // Initial base layer selection
       view: new View({
-        center: fromLonLat([-85.6024,12.7690]),
+        center: fromLonLat([-85.6024, 12.7690]),
         zoom: 15,
       }),
       controls: [],
     });
-    
 
     const zoomControl = new Zoom({
       className: 'ol-zoom',
@@ -101,7 +108,7 @@ function MapComponent() {
         console.log('Drawn Polygon GeoJSON:', JSON.stringify(geojson));
 
         setDrawnGeoJSON(geojson);
-        setFetchDataRequired(true);
+        fetchAvailableDates(geojson, cloudCover);
       });
     }
   };
@@ -118,6 +125,7 @@ function MapComponent() {
       const vectorLayer = map.getLayers().getArray()[1];
       vectorLayer.getSource().clear();
       setDrawnGeoJSON(null);
+      setAvailableDates([]);
       setFetchDataRequired(false);
     }
   };
@@ -161,18 +169,49 @@ function MapComponent() {
     }
   };
 
+  const fetchAvailableDates = async (geojson, cloudCover) => {
+    setLoadingDates(true);
+    try {
+      const response = await axios.post('http://127.0.0.1:8000/api/indices/sentinel-data-availability/', {
+        geometry: geojson,
+        cloud_coverage: cloudCover,
+        end_date: "2024-06-22"
+      });
+      console.log(response.data);
+      const dates = response.data;
+      setAvailableDates(dates.map(date => parseISO(date))); // Parse the dates to Date objects
+    } catch (error) {
+      console.error('Error fetching available dates:', error);
+      toast.error(`Error fetching available dates: ${error.message}`);
+    } finally {
+      setLoadingDates(false);
+    }
+  };
+
   useEffect(() => {
     if (fetchDataRequired && map) {
       fetchGeoJSONData();
     }
   }, [fetchDataRequired, map]);
 
+  useEffect(() => {
+    if (drawnGeoJSON) {
+      fetchAvailableDates(drawnGeoJSON, cloudCover);
+    }
+  }, [cloudCover]);
+
   const handleIndexChange = event => {
     setSelectedIndex(event.target.value);
   };
 
-  const handleDateChange = event => {
-    setSelectedDate(event.target.value);
+  const handleDateChange = date => {
+    const formattedDate = format(date, 'yyyy-MM-dd');
+    setSelectedDate(formattedDate);
+    console.log(selectedDate);
+  };
+
+  const handleCloudCoverChange = event => {
+    setCloudCover(event.target.value);
   };
 
   const handleFetchData = () => {
@@ -190,6 +229,25 @@ function MapComponent() {
   const getToggleButtonText = () => {
     return baseLayer === 'google' ? 'Switch to OSM' : 'Switch to Google Satellite';
   };
+
+  const isDateSelectable = date => {
+    return availableDates.some(availableDate => 
+      isAfter(date, startOfDay(availableDate)) && 
+      isBefore(date, endOfDay(availableDate))
+    );
+  };
+
+  const CustomDateInput = React.forwardRef(({ value, onClick, loading }, ref) => (
+    <div className="custom-date-input" onClick={onClick} ref={ref}>
+      {loading ? (
+        <div className="loading-tooltip">
+          <FaSpinner className="spinner" /> Loading dates...
+        </div>
+      ) : (
+        value || 'Select a date'
+      )}
+    </div>
+  ));
 
   return (
     <div className="map-wrapper">
@@ -224,11 +282,22 @@ function MapComponent() {
         </label>
         <div>
           <h3>Select Date</h3>
-          <input type="date" value={selectedDate} onChange={handleDateChange} />
+          <DatePicker
+            selected={selectedDate}
+            onChange={handleDateChange}
+            includeDates={availableDates} // Only allow selectable dates
+            placeholderText="Select a date"
+            customInput={<CustomDateInput loading={loadingDates} />}
+          />
         </div>
-        
-        <button onClick={handleFetchData}>Fetch Data</button>
-        <button onClick={toggleBaseLayer}>{getToggleButtonText()}</button>
+        <div>
+          <h3>Cloud Cover</h3>
+          <input type="number" value={cloudCover} onChange={handleCloudCoverChange} min="0" max="100" />
+        </div>
+        <div className='sidebar-buttons'>
+          <button onClick={handleFetchData}>Fetch Data</button>
+          <button onClick={toggleBaseLayer}>{getToggleButtonText()}</button>
+        </div>
       </div>
       {loading && (
         <div className="loader-container">

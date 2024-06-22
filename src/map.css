@@ -43,7 +43,7 @@
   border-radius: 4px;
 }
 
-.sidebar button {
+.sidebar-buttons button {
   margin-top: 20px;
   width: 100%;
   background-color: #4CAF50;
@@ -59,15 +59,15 @@
   transition: background-color 0.3s ease;
 }
 
-.sidebar button:hover {
+.sidebar-buttons button:hover {
   background-color: #45a049;
 }
 
-.sidebar button:active {
+.sidebar-buttons button:active {
   background-color: #3e8e41;
 }
 
-.sidebar button:focus {
+.sidebar-buttons button:focus {
   outline: none;
 }
 
@@ -142,4 +142,8 @@ button:focus {
   100% {
     transform: rotate(360deg);
   }
+}
+
+.react-datepicker-wrapper{
+  cursor: pointer;
 }
