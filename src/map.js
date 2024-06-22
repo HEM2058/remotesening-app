@@ -135,11 +135,15 @@ function MapComponent() {
 
   const generateColorMapping = (classes) => {
     const colors = [
-      '#ff0000', '#00ff00', '#0000ff', '#ffff00', 
-      '#ff00ff', '#00ffff', '#800000', '#808000',
-      '#800080', '#008080', '#000080', '#808080'
+      '#00ff00',  // Bright green
+      '#00e600',  // Very light green
+      '#00cc00',  // Light green
+      '#00b300',  // Light medium green
+      '#009900',  // Medium green
+      '#007a00',  // Medium deep green
+      '#006600',  // Deep green
+      '#004d00'   // Very deep green
     ];
-
     const colorMapping = {};
     classes.forEach((className, index) => {
       colorMapping[className] = colors[index % colors.length];
@@ -342,22 +346,62 @@ function MapComponent() {
       )}
       <div ref={mapRef} className="map-container"></div>
       <div className="buttons">
-        <button onClick={addDrawInteraction}>Draw Polygon</button>
+        <button onClick={addDrawInteraction}>Draw AOI Polygon</button>
         <button onClick={removeDrawInteraction}>Stop Drawing</button>
-        <button onClick={clearDrawnFeatures}>Clear Drawing</button>
+        <button onClick={clearDrawnFeatures}>Clear Feature</button>
       </div>
       <ToastContainer position="top-center" />
-      <div className="legend">
-        <h3>Legend</h3>
-        <ul>
-          {Object.entries(legendColors).map(([className, color]) => (
-            <li key={className}>
-              <span className="legend-color-box" style={{ backgroundColor: color }}></span>
-              {className}
-            </li>
-          ))}
-        </ul>
-      </div>
+
+      {legendColors && Object.entries(legendColors).length > 0 && (
+  <div className="legend">
+    <h3>Legend</h3>
+    <ul className='ul-flex'>
+      {Object.entries(legendColors).map(([className, color]) => {
+        let range;
+        switch (className) {
+          case '0':
+            range = 'NDVI <= 0';
+            break;
+          case '1':
+            range = '0 < NDVI <= 0.1';
+            break;
+          case '2':
+            range = '0.1 < NDVI <= 0.2';
+            break;
+          case '3':
+            range = '0.2 < NDVI <= 0.4';
+            break;
+          case '4':
+            range = '0.4 < NDVI <= 0.5';
+            break;
+          case '5':
+            range = '0.5 < NDVI <= 0.6';
+            break;
+          case '6':
+            range = '0.6 < NDVI <= 0.65';
+            break;
+          case '7':
+            range = '0.65 < NDVI <= 0.7';
+            break;
+          case '8':
+            range = '0.7 < NDVI <= 1';
+            break;
+          default:
+            range = 'Unknown Range';
+        }
+        return (
+          <li key={className}>
+            <span className="legend-color-box" style={{ backgroundColor: color }}></span>
+            {range}
+          </li>
+        );
+      })}
+    </ul>
+  </div>
+)}
+
+
+
     </div>
   );
 }
