@@ -13,6 +13,7 @@ import axios from 'axios'; // Import Axios for API requests
 import Feature from 'ol/Feature';
 import Polygon from 'ol/geom/Polygon';
 import Zoom from 'ol/control/Zoom';
+import { Style, Fill, Stroke } from 'ol/style';
 import { ToastContainer, toast } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
 import DatePicker from 'react-datepicker';
@@ -34,7 +35,7 @@ function MapComponent() {
   const [loading, setLoading] = useState(false);
   const [loadingDates, setLoadingDates] = useState(false); // State to track loading of available dates
   const [baseLayer, setBaseLayer] = useState('google'); // State to track current base layer
-  console.log(typeof(cloudCover))
+  const [legendColors, setLegendColors] = useState({}); // State to store legend colors
 
   useEffect(() => {
     const vectorSource = new VectorSource({ wrapX: false });
@@ -127,7 +128,24 @@ function MapComponent() {
       setDrawnGeoJSON(null);
       setAvailableDates([]);
       setFetchDataRequired(false);
+      setGeoJSONFeatures([]);
+      setLegendColors({});
     }
+  };
+
+  const generateColorMapping = (classes) => {
+    const colors = [
+      '#ff0000', '#00ff00', '#0000ff', '#ffff00', 
+      '#ff00ff', '#00ffff', '#800000', '#808000',
+      '#800080', '#008080', '#000080', '#808080'
+    ];
+
+    const colorMapping = {};
+    classes.forEach((className, index) => {
+      colorMapping[className] = colors[index % colors.length];
+    });
+
+    return colorMapping;
   };
 
   const fetchGeoJSONData = async () => {
@@ -144,7 +162,14 @@ function MapComponent() {
         date: selectedDate,
         geometry: drawnGeoJSON,
       });
+      console.log(response.data)
       const { features } = response.data;
+
+      const classes = [...new Set(features.map(feature => feature.properties.class_no))];
+      console.log(classes)
+      const colorMapping = generateColorMapping(classes);
+      console.log(colorMapping)
+      setLegendColors(colorMapping);
 
       const olFeatures = features.map(feature => {
         const coordinates = feature.geometry.coordinates[0].map(coord => fromLonLat(coord));
@@ -153,6 +178,16 @@ function MapComponent() {
           geometry: new Polygon([coordinates]),
           properties: feature.properties,
         });
+
+        olFeature.setStyle(new Style({
+          fill: new Fill({
+            color: colorMapping[feature.properties.class],
+          }),
+          stroke: new Stroke({
+            color: '#000000',
+            width: 1,
+          }),
+        }));
 
         return olFeature;
       });
@@ -312,6 +347,17 @@ function MapComponent() {
         <button onClick={clearDrawnFeatures}>Clear Drawing</button>
       </div>
       <ToastContainer position="top-center" />
+      <div className="legend">
+        <h3>Legend</h3>
+        <ul>
+          {Object.entries(legendColors).map(([className, color]) => (
+            <li key={className}>
+              <span className="legend-color-box" style={{ backgroundColor: color }}></span>
+              {className}
+            </li>
+          ))}
+        </ul>
+      </div>
     </div>
   );
 }
