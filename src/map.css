@@ -6,7 +6,7 @@
 
 .sidebar {
   position: absolute;
-  bottom: 20px;
+  bottom: 200px;
   left: 40px;
   z-index: 1000;
   background-color: #ffffff;

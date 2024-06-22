@@ -4,6 +4,7 @@ import './map.css'; // Make sure to import the CSS file for styling
 import { Map, View } from 'ol';
 import TileLayer from 'ol/layer/Tile';
 import OSM from 'ol/source/OSM';
+import XYZ from 'ol/source/XYZ'; // Import XYZ source for Google Maps
 import VectorLayer from 'ol/layer/Vector';
 import VectorSource from 'ol/source/Vector';
 import { Draw } from 'ol/interaction';
@@ -20,11 +21,12 @@ function MapComponent() {
   const [map, setMap] = useState(null);
   const [draw, setDraw] = useState(null);
   const [geoJSONFeatures, setGeoJSONFeatures] = useState([]);
-  const [drawnGeoJSON, setDrawnGeoJSON] = useState(null); // New state to store drawn GeoJSON
+  const [drawnGeoJSON, setDrawnGeoJSON] = useState(null);
   const [selectedIndex, setSelectedIndex] = useState('NDVI');
   const [selectedDate, setSelectedDate] = useState('');
-  const [fetchDataRequired, setFetchDataRequired] = useState(false); // State to track if fetching data is required
-  const [loading, setLoading] = useState(false); // State to track loading state
+  const [fetchDataRequired, setFetchDataRequired] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const [baseLayer, setBaseLayer] = useState('google'); // State to track current base layer
 
   useEffect(() => {
     const vectorSource = new VectorSource({ wrapX: false });
@@ -33,22 +35,30 @@ function MapComponent() {
       source: vectorSource,
     });
 
+    const googleSource = new XYZ({
+      url: 'http://mt1.google.com/vt/lyrs=s&x={x}&y={y}&z={z}', // Google Satellite tiles URL
+      maxZoom: 19, // Adjust max zoom level as needed
+    });
+
+    const googleLayer = new TileLayer({
+      source: googleSource,
+    });
+
+    const osmLayer = new TileLayer({
+      source: new OSM(),
+    });
+
     const mapObject = new Map({
       target: mapRef.current,
-      layers: [
-        new TileLayer({
-          source: new OSM(),
-        }),
-        vectorLayer,
-      ],
+      layers: baseLayer === 'google' ? [googleLayer, vectorLayer] : [osmLayer, vectorLayer], // Initial base layer selection
       view: new View({
-        center: fromLonLat([83.939, 28.265]), // Centered on the approximate location of your GeoJSON data
-        zoom: 12, // Adjust zoom level as needed
+        center: fromLonLat([-85.6024,12.7690]),
+        zoom: 15,
       }),
       controls: [],
     });
+    
 
-    // Add zoom control with custom positioning
     const zoomControl = new Zoom({
       className: 'ol-zoom',
     });
@@ -61,12 +71,12 @@ function MapComponent() {
         mapObject.setTarget(null);
       }
     };
-  }, []);
+  }, [baseLayer]); // Re-render the map when baseLayer state changes
 
   const addDrawInteraction = () => {
     if (map) {
       const drawInteraction = new Draw({
-        source: map.getLayers().getArray()[1].getSource(),
+        source: map.getLayers().getArray()[1].getSource(), // Use the vector layer's source for drawing
         type: 'Polygon',
       });
 
@@ -75,29 +85,27 @@ function MapComponent() {
 
       drawInteraction.on('drawend', function (event) {
         const polygon = event.feature.getGeometry();
-        const coordinates = polygon.getCoordinates()[0]; // Get the first ring of coordinates
+        const coordinates = polygon.getCoordinates()[0];
 
-        // Convert projected coordinates (EPSG:3857) to WGS84 (EPSG:4326)
         const wgs84Coordinates = coordinates.map(coord => transform(coord, 'EPSG:3857', 'EPSG:4326'));
 
-        // Create GeoJSON structure
         const geojson = {
           type: 'Feature',
           geometry: {
             type: 'Polygon',
-            coordinates: [wgs84Coordinates], // Wrap in an array for Polygon coordinates
+            coordinates: [wgs84Coordinates],
           },
-          properties: {}, // Optional properties
+          properties: {},
         };
 
         console.log('Drawn Polygon GeoJSON:', JSON.stringify(geojson));
 
-        // Store the drawn GeoJSON in state
         setDrawnGeoJSON(geojson);
-        setFetchDataRequired(true); // Set flag to indicate fetching data is required
+        setFetchDataRequired(true);
       });
     }
   };
+
   const removeDrawInteraction = () => {
     if (map && draw) {
       map.removeInteraction(draw);
@@ -109,73 +117,78 @@ function MapComponent() {
     if (map) {
       const vectorLayer = map.getLayers().getArray()[1];
       vectorLayer.getSource().clear();
-      setDrawnGeoJSON(null); // Clear the drawn GeoJSON from state
-      setFetchDataRequired(false); // Reset flag
+      setDrawnGeoJSON(null);
+      setFetchDataRequired(false);
     }
   };
 
   const fetchGeoJSONData = async () => {
-    setLoading(true); // Set loading state to true before making API call
+    setLoading(true);
 
     try {
       if (!selectedIndex || !selectedDate || !drawnGeoJSON) {
-        // If any of the required fields are missing, do not proceed with API call
         return;
       }
+
       removeDrawInteraction();
 
       const response = await axios.post(`http://127.0.0.1:8000/api/indices/${selectedIndex.toLowerCase()}/`, {
         date: selectedDate,
-        geometry: drawnGeoJSON // Include drawn GeoJSON in the request
+        geometry: drawnGeoJSON,
       });
       const { features } = response.data;
 
-      // Iterate through features and create OpenLayers features
       const olFeatures = features.map(feature => {
         const coordinates = feature.geometry.coordinates[0].map(coord => fromLonLat(coord));
 
         const olFeature = new Feature({
           geometry: new Polygon([coordinates]),
-          properties: feature.properties, // Optionally include properties
+          properties: feature.properties,
         });
 
         return olFeature;
       });
 
-      // Set GeoJSON features state
       setGeoJSONFeatures(olFeatures);
 
-      // Add features to vector source
       map.getLayers().getArray()[1].getSource().addFeatures(olFeatures);
     } catch (error) {
       console.error('Error fetching GeoJSON data:', error);
       toast.error(`Error fetching GeoJSON data: ${error.message}`);
     } finally {
-      setLoading(false); // Reset loading state after API call
-      setFetchDataRequired(false); // Reset flag after API call
+      setLoading(false);
+      setFetchDataRequired(false);
     }
   };
 
   useEffect(() => {
     if (fetchDataRequired && map) {
-      fetchGeoJSONData(); // Call fetchGeoJSONData when map is ready and data is required
+      fetchGeoJSONData();
     }
   }, [fetchDataRequired, map]);
 
-  const handleIndexChange = (event) => {
+  const handleIndexChange = event => {
     setSelectedIndex(event.target.value);
   };
 
-  const handleDateChange = (event) => {
+  const handleDateChange = event => {
     setSelectedDate(event.target.value);
   };
 
   const handleFetchData = () => {
     if (selectedIndex && selectedDate && drawnGeoJSON) {
-      setFetchDataRequired(true); // Set flag to trigger fetching data
+      setFetchDataRequired(true);
     } else {
       toast.error('Please select Index, Date, and draw a feature on the map.');
     }
+  };
+
+  const toggleBaseLayer = () => {
+    setBaseLayer(baseLayer === 'google' ? 'osm' : 'google'); // Toggle between 'google' and 'osm'
+  };
+
+  const getToggleButtonText = () => {
+    return baseLayer === 'google' ? 'Switch to OSM' : 'Switch to Google Satellite';
   };
 
   return (
@@ -215,20 +228,20 @@ function MapComponent() {
         </div>
         
         <button onClick={handleFetchData}>Fetch Data</button>
-     
+        <button onClick={toggleBaseLayer}>{getToggleButtonText()}</button>
       </div>
       {loading && (
-          <div className="loader-container">
-            <div className="loader"></div>
-          </div>
-        )}
+        <div className="loader-container">
+          <div className="loader"></div>
+        </div>
+      )}
       <div ref={mapRef} className="map-container"></div>
       <div className="buttons">
         <button onClick={addDrawInteraction}>Draw Polygon</button>
         <button onClick={removeDrawInteraction}>Stop Drawing</button>
         <button onClick={clearDrawnFeatures}>Clear Drawing</button>
       </div>
-      <ToastContainer position="top-center" /> {/* ToastContainer to display notifications */}
+      <ToastContainer position="top-center" />
     </div>
   );
 }
