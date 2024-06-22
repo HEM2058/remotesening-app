@@ -87,9 +87,9 @@
 }
 
 button {
-  background-color: #4CAF50; /* Green */
+  
   border: none;
-  color: white;
+  background-color: white;
   padding: 15px 20px;
   text-align: center;
   text-decoration: none;
@@ -102,7 +102,7 @@ button {
 }
 
 button:hover {
-  background-color: #45a049;
+  background-color: #d3e2d4;
 }
 
 button:active {
@@ -112,3 +112,4 @@ button:active {
 button:focus {
   outline: none;
 }
+

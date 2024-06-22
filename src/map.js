@@ -11,12 +11,14 @@ import { transform, fromLonLat } from 'ol/proj';
 import axios from 'axios'; // Import Axios for API requests
 import Feature from 'ol/Feature';
 import Polygon from 'ol/geom/Polygon';
+import Zoom from 'ol/control/Zoom';
 
 function MapComponent() {
   const mapRef = useRef(null);
   const [map, setMap] = useState(null);
   const [draw, setDraw] = useState(null);
   const [geoJSONFeatures, setGeoJSONFeatures] = useState([]);
+  const [drawnGeoJSON, setDrawnGeoJSON] = useState(null); // New state to store drawn GeoJSON
   const [selectedIndex, setSelectedIndex] = useState('NDVI');
   const [selectedDate, setSelectedDate] = useState('');
 
@@ -39,7 +41,14 @@ function MapComponent() {
         center: fromLonLat([83.939, 28.265]), // Centered on the approximate location of your GeoJSON data
         zoom: 12, // Adjust zoom level as needed
       }),
+      controls: [],
     });
+
+    // Add zoom control with custom positioning
+    const zoomControl = new Zoom({
+      className: 'ol-zoom',
+    });
+    mapObject.addControl(zoomControl);
 
     setMap(mapObject);
 
@@ -78,14 +87,10 @@ function MapComponent() {
         };
 
         console.log('Drawn Polygon GeoJSON:', JSON.stringify(geojson));
-      });
-    }
-  };
 
-  const removeDrawInteraction = () => {
-    if (map && draw) {
-      map.removeInteraction(draw);
-      setDraw(null);
+        // Store the drawn GeoJSON in state
+        setDrawnGeoJSON(geojson);
+      });
     }
   };
 
@@ -93,15 +98,15 @@ function MapComponent() {
     if (map) {
       const vectorLayer = map.getLayers().getArray()[1];
       vectorLayer.getSource().clear();
+      setDrawnGeoJSON(null); // Clear the drawn GeoJSON from state
     }
   };
 
   const fetchGeoJSONData = async () => {
     try {
-      const response = await axios.get(`http://127.0.0.1:8000/api/indices/${selectedIndex.toLowerCase()}/`, {
-        params: {
-          date: selectedDate
-        }
+      const response = await axios.post(`http://127.0.0.1:8000/api/indices/${selectedIndex.toLowerCase()}/`, {
+        date: selectedDate,
+        geometry: drawnGeoJSON // Include drawn GeoJSON in the request
       });
       const { features } = response.data;
 
@@ -177,8 +182,8 @@ function MapComponent() {
           LST
         </label>
         <div>
-        <h3>Select Date</h3>
-        <input type="date" value={selectedDate} onChange={handleDateChange} />
+          <h3>Select Date</h3>
+          <input type="date" value={selectedDate} onChange={handleDateChange} />
         </div>
         
         <button onClick={handleFetchData}>Fetch Data</button>
@@ -186,7 +191,6 @@ function MapComponent() {
       <div ref={mapRef} className="map-container"></div>
       <div className="buttons">
         <button onClick={addDrawInteraction}>Draw Polygon</button>
-        <button onClick={removeDrawInteraction}>Stop Drawing</button>
         <button onClick={clearDrawnFeatures}>Clear Drawing</button>
       </div>
     </div>
