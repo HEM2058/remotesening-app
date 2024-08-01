@@ -169,3 +169,32 @@ button:focus {
 li{
   list-style-type: none;
 }
+
+.popup {
+  background-color: white;
+  padding: 5px;
+  border: 1px solid #ccc;
+  border-radius: 3px;
+  box-shadow: 0 2px 5px rgba(0, 0, 0, 0.2);
+}
+
+.heatmap-legend {
+  padding: 10px;
+  background: white;
+  border: 1px solid #ccc;
+  border-radius: 5px;
+}
+
+.heatmap-legend h3 {
+  margin-top: 0;
+}
+
+.gradient {
+  display: flex;
+}
+
+.gradient div {
+  width: 20px;
+  height: 20px;
+  margin-right: 2px;
+}

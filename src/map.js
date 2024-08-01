@@ -12,6 +12,7 @@ import { transform, fromLonLat } from 'ol/proj';
 import axios from 'axios'; // Import Axios for API requests
 import Feature from 'ol/Feature';
 import Polygon from 'ol/geom/Polygon';
+import MultiPolygon from 'ol/geom/MultiPolygon'; // Import MultiPolygon for handling MultiPolygon geometries
 import Zoom from 'ol/control/Zoom';
 import { Style, Fill, Stroke } from 'ol/style';
 import { ToastContainer, toast } from 'react-toastify';
@@ -162,13 +163,13 @@ function MapComponent() {
 
       removeDrawInteraction();
 
-      const response = await axios.post(`http://127.0.0.1:8000/api/indices/${selectedIndex.toLowerCase()}/`, {
+      const response = await axios.post(`https://gis.sensegrass.com/api/indices/${selectedIndex.toLowerCase()}/`, {
         date: selectedDate,
         geometry: drawnGeoJSON,
       });
-      console.log(response.data)
-      const { features } = response.data;
 
+      const { features } = response.data;
+    
       const classes = [...new Set(features.map(feature => feature.properties.class_no))];
       console.log(classes)
       const colorMapping = generateColorMapping(classes);
@@ -176,24 +177,59 @@ function MapComponent() {
       setLegendColors(colorMapping);
 
       const olFeatures = features.map(feature => {
-        const coordinates = feature.geometry.coordinates[0].map(coord => fromLonLat(coord));
+        const geometryType = feature.geometry.type;
+        console.log(geometryType)
+        let coordinates = [];
 
-        const olFeature = new Feature({
-          geometry: new Polygon([coordinates]),
-          properties: feature.properties,
-        });
+        if (geometryType === 'Polygon') {
+          coordinates = feature.geometry.coordinates[0].map(coord => fromLonLat(coord));
+          const olFeature = new Feature({
+            geometry: new Polygon([coordinates]),
+            properties: feature.properties,
+          });
 
-        olFeature.setStyle(new Style({
-          fill: new Fill({
-            color: colorMapping[feature.properties.class_no],
-          }),
-          stroke: new Stroke({
-            color: '#000000',
-            width: 1,
-          }),
-        }));
+          olFeature.setStyle(new Style({
+            fill: new Fill({
+              color: colorMapping[feature.properties.class_no],
+            }),
+            stroke: new Stroke({
+              color: '#000000',
+              width: 1,
+            }),
+          }));
 
-        return olFeature;
+          return olFeature;
+        } else if (geometryType === 'MultiPolygon') {
+          console.log("There is a MultiPolygon");
+        
+          // Convert coordinates from longitude/latitude to map projection
+          const multiPolygonCoordinates = feature.geometry.coordinates.map(polygon =>
+            // Each polygon can have multiple rings, process each ring separately
+            polygon.map(ring =>
+              ring.map(coord => fromLonLat(coord)) // Convert each coordinate
+            )
+          );
+        
+          // Create an OpenLayers MultiPolygon feature
+          const olFeature = new Feature({
+            geometry: new MultiPolygon(multiPolygonCoordinates),
+            properties: feature.properties,
+          });
+        
+          // Set style for the feature
+          olFeature.setStyle(new Style({
+            fill: new Fill({
+              color: colorMapping[feature.properties.class_no],
+            }),
+            stroke: new Stroke({
+              color: '#000000',
+              width: 1,
+            }),
+          }));
+        
+          return olFeature;
+        }
+        
       });
 
       setGeoJSONFeatures(olFeatures);
@@ -211,7 +247,7 @@ function MapComponent() {
   const fetchAvailableDates = async (geojson, cloudCover) => {
     setLoadingDates(true);
     try {
-      const response = await axios.post('http://127.0.0.1:8000/api/indices/sentinel-data-availability/', {
+      const response = await axios.post('https://gis.sensegrass.com/api/indices/sentinel-data-availability/', {
         geometry: geojson,
         cloud_coverage: cloudCover,
         end_date: "2024-06-22"
