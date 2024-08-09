@@ -21,7 +21,7 @@ import DatePicker from 'react-datepicker';
 import 'react-datepicker/dist/react-datepicker.css';
 import { parseISO, format, isBefore, isAfter, startOfDay, endOfDay } from 'date-fns';
 import { FaSpinner } from 'react-icons/fa';
-
+import { FaInfoCircle } from 'react-icons/fa'; // Using FontAwesome for info icon
 function MapComponent() {
   const mapRef = useRef(null);
   const [map, setMap] = useState(null);
@@ -36,7 +36,13 @@ function MapComponent() {
   const [loading, setLoading] = useState(false);
   const [loadingDates, setLoadingDates] = useState(false); // State to track loading of available dates
   const [baseLayer, setBaseLayer] = useState('google'); // State to track current base layer
-  const [legendColors, setLegendColors] = useState({}); // State to store legend colors
+  const [legendColors, setLegendColors] = useState([]);
+
+  const [visibleDescription, setVisibleDescription] = useState(null);
+
+  const toggleDescription = (classNo) => {
+    setVisibleDescription(prev => (prev === classNo ? null : classNo));
+  };
 
   useEffect(() => {
     const vectorSource = new VectorSource({ wrapX: false });
@@ -134,24 +140,7 @@ function MapComponent() {
     }
   };
 
-  const generateColorMapping = (classes) => {
-    const colors = [
-      '#00ff00',  // Bright green
-      '#00e600',  // Very light green
-      '#00cc00',  // Light green
-      '#00b300',  // Light medium green
-      '#009900',  // Medium green
-      '#007a00',  // Medium deep green
-      '#006600',  // Deep green
-      '#004d00'   // Very deep green
-    ];
-    const colorMapping = {};
-    classes.forEach((className, index) => {
-      colorMapping[className] = colors[index % colors.length];
-    });
-
-    return colorMapping;
-  };
+ 
 
   const fetchGeoJSONData = async () => {
     setLoading(true);
@@ -163,18 +152,29 @@ function MapComponent() {
 
       removeDrawInteraction();
 
-      const response = await axios.post(`https://gis.sensegrass.com/api/indices/${selectedIndex.toLowerCase()}/`, {
+      const response = await axios.post(`http://127.0.0.1:8000/api/indices/${selectedIndex.toLowerCase()}/`, {
         date: selectedDate,
         geometry: drawnGeoJSON,
       });
-
-      const { features } = response.data;
+      
+      const { legend_info, geojson } = response.data;
+      const {features} = geojson
     
-      const classes = [...new Set(features.map(feature => feature.properties.class_no))];
-      console.log(classes)
-      const colorMapping = generateColorMapping(classes);
-      console.log(colorMapping)
-      setLegendColors(colorMapping);
+      const legend_colors = legend_info.legend_colors
+   
+     
+    
+      // Set legend colors from backend
+      setLegendColors(legend_colors);
+ 
+    // Create a mapping of class_no to color
+const colorMap = legend_colors.reduce((map, legend) => {
+  map[legend.class_no] = legend.color;
+  return map;
+}, {});
+
+    console.log(colorMap)
+   
 
       const olFeatures = features.map(feature => {
         const geometryType = feature.geometry.type;
@@ -190,7 +190,7 @@ function MapComponent() {
 
           olFeature.setStyle(new Style({
             fill: new Fill({
-              color: colorMapping[feature.properties.class_no],
+              color:colorMap[feature.properties.class_no] ,
             }),
             stroke: new Stroke({
               color: '#000000',
@@ -219,7 +219,7 @@ function MapComponent() {
           // Set style for the feature
           olFeature.setStyle(new Style({
             fill: new Fill({
-              color: colorMapping[feature.properties.class_no],
+              color:colorMap[feature.properties.class_no],
             }),
             stroke: new Stroke({
               color: '#000000',
@@ -247,7 +247,7 @@ function MapComponent() {
   const fetchAvailableDates = async (geojson, cloudCover) => {
     setLoadingDates(true);
     try {
-      const response = await axios.post('https://gis.sensegrass.com/api/indices/sentinel-data-availability/', {
+      const response = await axios.post('http://127.0.0.1:8000/api/indices/sentinel-data-availability/', {
         geometry: geojson,
         cloud_coverage: cloudCover,
         end_date: "2024-06-22"
@@ -388,51 +388,28 @@ function MapComponent() {
       </div>
       <ToastContainer position="top-center" />
 
-      {legendColors && Object.entries(legendColors).length > 0 && (
+      {legendColors && (
   <div className="legend">
-    <h3>Legend</h3>
-    <ul className='ul-flex'>
-      {Object.entries(legendColors).map(([className, color]) => {
-        let range;
-        switch (className) {
-          case '0':
-            range = 'NDVI <= 0';
-            break;
-          case '1':
-            range = '0 < NDVI <= 0.1';
-            break;
-          case '2':
-            range = '0.1 < NDVI <= 0.2';
-            break;
-          case '3':
-            range = '0.2 < NDVI <= 0.4';
-            break;
-          case '4':
-            range = '0.4 < NDVI <= 0.5';
-            break;
-          case '5':
-            range = '0.5 < NDVI <= 0.6';
-            break;
-          case '6':
-            range = '0.6 < NDVI <= 0.65';
-            break;
-          case '7':
-            range = '0.65 < NDVI <= 0.7';
-            break;
-          case '8':
-            range = '0.7 < NDVI <= 1';
-            break;
-          default:
-            range = 'Unknown Range';
-        }
-        return (
-          <li key={className}>
-            <span className="legend-color-box" style={{ backgroundColor: color }}></span>
-            {range}
-          </li>
-        );
-      })}
-    </ul>
+    {legendColors.map(({ class_no, range, description, color }) => (
+      <div key={class_no} className="legend-item">
+        <div
+          className="legend-color-box"
+          style={{ backgroundColor: color }}
+        />
+        <div className="legend-text">
+          <div className="legend-range">{range}</div>
+          <div className="legend-description-wrapper">
+            <FaInfoCircle
+              className="info-icon"
+              onClick={() => toggleDescription(class_no)}
+            />
+            {visibleDescription === class_no && (
+              <div className="legend-description">{description}</div>
+            )}
+          </div>
+        </div>
+      </div>
+    ))}
   </div>
 )}
 
